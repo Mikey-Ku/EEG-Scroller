@@ -40,6 +40,17 @@ python scripts/record.py --no-webcam --notes "Mikey, library"
 4. The session is saved to `data/sessions/<date-time>/`, then the model retrains on **all** sessions
    and is saved to `models/latest.joblib`.
 
+### With the Muse 2
+In one terminal, keep the headset streaming (`--lsltime` is required; without it EEG
+timestamps won't line up with the reels):
+```bash
+muselsl stream --lsltime
+```
+Then in another terminal, for real sessions:
+```bash
+python scripts/record.py --eeg muse --real-only --notes "..."
+```
+
 ## Auto-scroller
 ```bash
 python scripts/record.py --auto-scroll 5 --max-reels 20 --no-webcam   # program scrolls every 5 s, stops after 20 reels

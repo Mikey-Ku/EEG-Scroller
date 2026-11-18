@@ -1,0 +1,236 @@
+# VibeBlocks C4 model. Edited by your agent through VibeBlocks; commit it with the code.
+version: 1
+system:
+  id: eeg-scroller
+  name: EEG Scroller
+  description: Records Muse 2 EEG, webcam and reel timing while you scroll Instagram Reels, then tests whether the first 3 s of EEG predicts skip vs. watch.
+people:
+  - id: viewer
+    name: Viewer
+    description: Wears the Muse 2 and scrolls Reels while a session records.
+externals:
+  - id: instagram
+    name: Instagram Reels
+    description: The Reels feed the viewer scrolls.
+    technology: instagram.com in Chrome
+  - id: muse-bridge
+    name: Muse 2 + LSL bridge
+    description: Streams the headset's 4 EEG channels at 256 Hz over LSL.
+    technology: muselsl / MuseLSL2, Lab Streaming Layer
+  - id: webcam
+    name: Webcam
+    description: Laptop camera filming the viewer's face.
+    technology: OpenCV camera
+  - id: mediapipe-models
+    name: MediaPipe model host
+    description: Serves the face landmarker model downloaded on first webcam run.
+    technology: Google Cloud Storage
+containers:
+  - id: recorder
+    name: Session Recorder
+    type: cli
+    description: Records browser, EEG and webcam on one clock while the viewer scrolls, and saves the session.
+    technology: Python, Playwright, pylsl, MediaPipe
+    path: scripts
+    components:
+      - id: session-runner
+        name: Session runner
+        description: Starts all recorders, runs until q, and saves the session folder.
+        code:
+          - file: scripts/record.py
+            symbol: main
+          - file: src/eegscroll/session.py
+            symbol: record_session
+          - file: src/eegscroll/data.py
+            symbol: save_session
+          - file: src/eegscroll/clock.py
+      - id: reels-watcher
+        name: Reels watcher
+        description: Opens Reels, logs each reel's start, length and caption plus key presses, and can auto-scroll.
+        code:
+          - file: src/eegscroll/browser.py
+            symbol: ReelWatcher
+      - id: eeg-input
+        name: EEG input
+        description: Collects timestamped EEG from the real Muse or a simulated one.
+        code:
+          - file: src/eegscroll/eeg_sources.py
+            symbol: MuseLSL
+          - file: src/eegscroll/eeg_sources.py
+            symbol: SimulatedMuse
+      - id: face-tracking
+        name: Face tracking
+        description: "Per webcam frame: face found, eyes-closed score, yaw and pitch. Includes a webcam-only blink test for picking the blink cutoff."
+        code:
+          - file: src/eegscroll/webcam.py
+            symbol: WebcamRecorder
+          - file: scripts/blink_test.py
+            symbol: main
+      - id: pipeline-check
+        name: Pipeline self-check
+        description: Drives a fake Reels page with simulated EEG to test recording and retraining end to end.
+        code:
+          - file: scripts/check_pipeline.py
+            symbol: main
+          - file: scripts/fake_reels/reels.html
+  - id: trainer
+    name: Training Pipeline
+    type: cli
+    description: Labels reels, extracts features, evaluates models across sessions and saves the best one.
+    technology: Python, SciPy, scikit-learn
+    path: src/eegscroll
+    components:
+      - id: dataset-builder
+        name: Labels & windows
+        description: Turns saved sessions into labeled reels and cuts the first 3 s of EEG from each.
+        code:
+          - file: src/eegscroll/train.py
+            symbol: build_dataset
+          - file: src/eegscroll/labels.py
+          - file: src/eegscroll/windows.py
+          - file: src/eegscroll/data.py
+            symbol: load_all_sessions
+      - id: features
+        name: Feature extraction
+        description: Band power, engagement index and webcam blink/motion features, z-scored per session.
+        code:
+          - file: src/eegscroll/features.py
+      - id: model-eval
+        name: Model evaluation
+        description: Compares baseline, logistic regression and random forest with leave-one-session-out and a permutation test.
+        code:
+          - file: src/eegscroll/models.py
+          - file: src/eegscroll/evaluate.py
+          - file: src/eegscroll/train.py
+            symbol: evaluate_and_pick
+      - id: retraining
+        name: Retraining
+        description: Rebuilds the dataset from all sessions, picks the best model and saves it.
+        code:
+          - file: src/eegscroll/train.py
+            symbol: retrain
+          - file: scripts/run_session.py
+            symbol: main
+          - file: src/eegscroll/__init__.py
+      - id: synthetic
+        name: Synthetic sessions
+        description: Fake sessions with a known alpha effect to confirm models can find a real signal.
+        code:
+          - file: src/eegscroll/synthetic.py
+          - file: scripts/run_synthetic.py
+            symbol: main
+  - id: sessions-store
+    name: Session Recordings
+    type: storage
+    description: "One folder per session: eeg, videos, keys, face, auto-scroll logs."
+    technology: CSV + meta.json folders
+    path: data
+    components: []
+  - id: models-store
+    name: Saved Models
+    type: storage
+    description: The retrained skip/watch model and the cached face landmarker.
+    technology: joblib, .task
+    path: ""
+    components: []
+relationships:
+  - from: viewer
+    to: session-runner
+    kind: uses
+    description: starts a recording
+  - from: viewer
+    to: reels-watcher
+    kind: uses
+    description: scrolls reels, presses q to stop
+  - from: viewer
+    to: retraining
+    kind: uses
+    description: retrains on saved sessions
+  - from: session-runner
+    to: reels-watcher
+    kind: internal
+    description: runs the browser until the session ends
+  - from: session-runner
+    to: eeg-input
+    kind: internal
+    description: starts and stops EEG capture
+  - from: session-runner
+    to: face-tracking
+    kind: internal
+    description: starts and stops face tracking
+  - from: session-runner
+    to: sessions-store
+    kind: data
+    description: saves the session folder
+    technology: CSV, JSON
+  - from: session-runner
+    to: retraining
+    kind: command
+    description: retrains after each recording
+    evidence:
+      - file: scripts/record.py
+        symbol: main
+  - from: reels-watcher
+    to: instagram
+    kind: external
+    description: opens Reels and watches reel changes
+    technology: Playwright, injected JS
+  - from: eeg-input
+    to: muse-bridge
+    kind: external
+    description: pulls EEG samples
+    technology: LSL inlet
+  - from: face-tracking
+    to: webcam
+    kind: external
+    description: reads camera frames
+    technology: OpenCV
+  - from: face-tracking
+    to: mediapipe-models
+    kind: external
+    description: downloads face landmarker once
+    technology: HTTPS
+  - from: face-tracking
+    to: models-store
+    kind: data
+    description: caches the face model
+  - from: pipeline-check
+    to: session-runner
+    kind: internal
+    description: records a fake session
+  - from: pipeline-check
+    to: retraining
+    kind: command
+    description: retrains on the fake session
+    evidence:
+      - file: scripts/check_pipeline.py
+        symbol: main
+  - from: retraining
+    to: dataset-builder
+    kind: internal
+    description: builds X, y, groups
+  - from: retraining
+    to: model-eval
+    kind: internal
+    description: evaluates and picks the best model
+  - from: retraining
+    to: models-store
+    kind: data
+    description: saves latest.joblib
+    technology: joblib
+  - from: dataset-builder
+    to: sessions-store
+    kind: data
+    description: loads session folders
+  - from: dataset-builder
+    to: features
+    kind: internal
+    description: turns windows into features
+  - from: synthetic
+    to: dataset-builder
+    kind: internal
+    description: builds a dataset from fake sessions
+  - from: synthetic
+    to: model-eval
+    kind: internal
+    description: checks models find the planted effect

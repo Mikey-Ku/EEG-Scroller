@@ -70,8 +70,8 @@ def webcam_features(frames: pd.DataFrame, videos: pd.DataFrame, window_s: float 
             rows.append({"face_present": 0.0, "blink_rate": np.nan, "head_motion": np.nan})
             continue
 
-        # Blink = eyes-closed score rising past 0.5
-        closed = (face["blink"] > 0.5).astype(int)
+        # Blink = eyes-closed score rising past 0.3
+        closed = (face["blink"] > 0.3).astype(int)
         blinks = int((closed.diff() == 1).sum())
 
         # Head motion: average angle change per frame
