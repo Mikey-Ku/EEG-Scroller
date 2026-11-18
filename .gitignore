@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.egg-info/
+.pytest_cache/
+# Raw recordings stay local, never committed
+data/raw/*
+!data/raw/.gitkeep
+# Recorded sessions, trained models, browser login
+data/sessions/
+models/
+.browser_profile/

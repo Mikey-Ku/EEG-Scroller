@@ -1,0 +1,6 @@
+# Minimal packaging so "import eegscroll" works everywhere
+[project]
+name = "eegscroll"
+version = "0.1.0"
+requires-python = ">=3.11"
+

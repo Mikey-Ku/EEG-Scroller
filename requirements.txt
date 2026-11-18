@@ -1,0 +1,15 @@
+# Core numeric and data libraries
+numpy>=1.26
+pandas>=2.1
+scipy>=1.11
+scikit-learn>=1.4
+joblib>=1.3
+# Shared clock, and real Muse via muselsl
+pylsl>=1.16
+# Browser control for Instagram Reels
+playwright>=1.44
+# Webcam capture and face tracking
+opencv-python>=4.9
+mediapipe>=0.10.14
+# Installs our own package (src/eegscroll)
+-e .

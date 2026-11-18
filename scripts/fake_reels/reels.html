@@ -1,0 +1,34 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Fake Reels</title>
+<style>body{background:#111;color:#eee;font-family:sans-serif} video{display:none;width:320px;height:240px} video.on{display:block} #log{white-space:pre}</style>
+</head><body>
+<h3>Fake Reels: self-driving pipeline check</h3>
+<div id="stage"></div>
+<div id="log"></div>
+<script>
+// Seconds on each fake reel: 5.6 = watched, 3.4 = skipped, 1.5 = too short
+const plan = [5.6, 3.4, 5.6, 3.4, 1.5, 5.6, 3.4, 5.6, 3.4, 5.6, 3.4, 5.6, 3.4, 2.0];
+const srcs = ["red.mp4", "blue.mp4"];
+const stage = document.getElementById("stage"), log = document.getElementById("log");
+
+// One looping 5 s video element per fake reel
+const vids = plan.map((_, i) => {
+  const v = document.createElement("video");
+  v.src = srcs[i % 2]; v.muted = true; v.loop = true; v.preload = "auto";
+  stage.appendChild(v); return v;
+});
+
+// Fake key presses, same path as real ones
+const key = (k) => document.dispatchEvent(new KeyboardEvent("keydown", {key: k, bubbles: true}));
+
+// Play reels in order, then press q to end
+let i = 0;
+function step() {
+  if (i > 0) { vids[i-1].pause(); vids[i-1].classList.remove("on"); }
+  if (i >= plan.length) { log.textContent += "done, pressing q\n"; setTimeout(() => key("q"), 500); return; }
+  vids[i].classList.add("on"); vids[i].play();
+  log.textContent += `reel ${i+1}: ${plan[i]} s\n`;
+  setTimeout(() => { key("ArrowDown"); i++; step(); }, plan[i] * 1000);
+}
+setTimeout(step, 1000);
+</script></body></html>
