@@ -125,7 +125,8 @@ class ReelWatcher:
         self._offset = unix_to_clock_offset()
         self._left: dict | None = None
 
-    def _report(self, event: dict) -> None:
+    def handle(self, event: dict) -> None:
+        """One event from WATCHER_JS (Playwright here, or the app's embedded view)."""
         # Browser Unix time -> shared clock time
         t = event["t"] + self._offset
         if event["type"] == "key":
@@ -175,7 +176,7 @@ class ReelWatcher:
             )
 
             # Connect page script to Python, then open Reels
-            context.expose_function("eegReport", self._report)
+            context.expose_function("eegReport", self.handle)
             context.add_init_script(WATCHER_JS)
             page = context.pages[0] if context.pages else context.new_page()
             page.goto(url)

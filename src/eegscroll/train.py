@@ -10,7 +10,7 @@ from sklearn.base import clone
 from eegscroll.data import CHANNELS, SESSIONS_DIR, SFREQ, Session, load_all_sessions
 from eegscroll.evaluate import evaluate_models, permutation_p_value, print_feature_importance
 from eegscroll.features import band_power, webcam_features, zscore_within_session
-from eegscroll.labels import boundaries, build_video_table
+from eegscroll.labels import GAP_S, STAY_S, WINDOW_S, boundaries, build_video_table
 from eegscroll.models import get_models
 from eegscroll.windows import covered_mask, cut_windows
 
@@ -19,7 +19,7 @@ MODEL_PATH = Path(__file__).resolve().parents[2] / "models" / "latest.joblib"
 
 
 def session_features(
-    session: Session, window_s: float, skip_fraction: float
+    session: Session, window_s: float = WINDOW_S, stay_s: float = STAY_S, gap_s: float = GAP_S
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """One session -> (video table, raw feature table)."""
     rec = session.recording
@@ -32,7 +32,7 @@ def session_features(
     auto_ids = set(session.auto_scrolls["video_id"].astype(str))
     human = ~session.videos["video_id"].astype(str).isin(auto_ids).to_numpy()[:-1]
     videos = build_video_table(
-        rec.session_id, starts[human], ends[human], durations[human], window_s, skip_fraction
+        rec.session_id, starts[human], ends[human], durations[human], window_s, stay_s, gap_s
     )
 
     # Keep videos with full EEG coverage
@@ -51,10 +51,10 @@ def session_features(
 
 
 def build_dataset(
-    sessions: list[Session], window_s: float = 3.0, skip_fraction: float = 0.9
+    sessions: list[Session], window_s: float = WINDOW_S, stay_s: float = STAY_S, gap_s: float = GAP_S
 ) -> tuple[pd.DataFrame, np.ndarray, np.ndarray, pd.DataFrame]:
     """All sessions -> X, y, groups, videos."""
-    parts = [session_features(s, window_s, skip_fraction) for s in sessions]
+    parts = [session_features(s, window_s, stay_s, gap_s) for s in sessions]
     parts = [(v, X) for v, X in parts if not v.empty]
     if not parts:
         return pd.DataFrame(), np.array([]), np.array([]), pd.DataFrame()
@@ -102,8 +102,9 @@ def evaluate_and_pick(
 def retrain(
     root: Path = SESSIONS_DIR,
     real_only: bool = False,
-    window_s: float = 3.0,
-    skip_fraction: float = 0.9,
+    window_s: float = WINDOW_S,
+    stay_s: float = STAY_S,
+    gap_s: float = GAP_S,
     model_path: Path = MODEL_PATH,
 ) -> Path | None:
     """Rebuild from every saved session and save the best model."""
@@ -114,7 +115,7 @@ def retrain(
     if fake:
         print(f"Note: {len(fake)} session(s) use simulated EEG: {', '.join(fake)}")
 
-    X, y, groups, videos = build_dataset(sessions, window_s, skip_fraction)
+    X, y, groups, videos = build_dataset(sessions, window_s, stay_s, gap_s)
     print(f"{len(sessions)} sessions, {len(videos)} usable reels, {int((y == 1).sum())} skips")
 
     # Need enough reels and both labels
@@ -133,7 +134,8 @@ def retrain(
             "name": best,
             "features": list(X.columns),
             "window_s": window_s,
-            "skip_fraction": skip_fraction,
+            "stay_s": stay_s,
+            "gap_s": gap_s,
             "sessions": sorted(set(groups)),
         },
         model_path,

@@ -9,3 +9,6 @@ data/raw/*
 data/sessions/
 models/
 .browser_profile/
+# Sessions taken out of training (kept, not committed)
+data/excluded/
+.DS_Store

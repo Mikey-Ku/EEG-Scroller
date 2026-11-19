@@ -119,6 +119,12 @@ containers:
           - file: src/eegscroll/synthetic.py
           - file: scripts/run_synthetic.py
             symbol: main
+      - id: quality-report
+        name: Session quality report
+        description: Checks a saved session's EEG contact, hum, webcam and usable reels.
+        code:
+          - file: src/eegscroll/quality.py
+            symbol: session_report
   - id: sessions-store
     name: Session Recordings
     type: storage
@@ -133,6 +139,38 @@ containers:
     technology: joblib, .task
     path: ""
     components: []
+  - id: desktop-app
+    name: Desktop App
+    type: desktop-app
+    description: "One window for recording: headset status, live EEG, webcam preview, session start/stop, and Reels embedded."
+    technology: PySide6, pyqtgraph, WKWebView
+    path: src/eegscroll/gui
+    components:
+      - id: app-window
+        name: Main window
+        description: Panels, refresh loop, session start/stop/save and the keep/retrain/delete prompt.
+        code:
+          - file: src/eegscroll/gui/app.py
+            symbol: MainWindow
+          - file: scripts/app.py
+          - file: src/eegscroll/gui/__init__.py
+      - id: eeg-monitor
+        name: EEG monitor
+        description: "Always-on LSL reader: live buffer, per-sensor quality, session cut-out; simulated stream for --sim."
+        code:
+          - file: src/eegscroll/gui/eeg_monitor.py
+      - id: muse-process
+        name: muselsl runner
+        description: Starts and stops `muselsl stream --lsltime` and reports its status.
+        code:
+          - file: src/eegscroll/gui/muse_process.py
+            symbol: MuseProcess
+      - id: reels-view
+        name: Embedded Reels
+        description: Instagram in Safari's engine inside the window, running the same reel watcher script.
+        code:
+          - file: src/eegscroll/gui/reels_view.py
+            symbol: ReelsView
 relationships:
   - from: viewer
     to: session-runner
@@ -234,3 +272,58 @@ relationships:
     to: model-eval
     kind: internal
     description: checks models find the planted effect
+  - from: viewer
+    to: app-window
+    kind: uses
+    description: records sessions in one window
+  - from: app-window
+    to: eeg-monitor
+    kind: internal
+    description: plots EEG and cuts out each session
+  - from: app-window
+    to: muse-process
+    kind: internal
+    description: connects the headset
+  - from: app-window
+    to: reels-view
+    kind: internal
+    description: shows Reels and receives reel/key events
+  - from: app-window
+    to: face-tracking
+    kind: command
+    description: runs the webcam for preview and recording
+  - from: app-window
+    to: session-runner
+    kind: command
+    description: saves sessions in the same format
+    evidence:
+      - file: src/eegscroll/gui/app.py
+        symbol: save_recorded
+  - from: app-window
+    to: quality-report
+    kind: request
+    description: shows the report after Stop
+  - from: app-window
+    to: retraining
+    kind: command
+    description: retrains when asked
+    technology: subprocess
+  - from: muse-process
+    to: muse-bridge
+    kind: external
+    description: launches muselsl
+    technology: subprocess
+  - from: eeg-monitor
+    to: muse-bridge
+    kind: external
+    description: pulls EEG samples
+    technology: LSL inlet
+  - from: reels-view
+    to: instagram
+    kind: external
+    description: shows Reels and watches reel changes
+    technology: WKWebView, injected JS
+  - from: quality-report
+    to: sessions-store
+    kind: data
+    description: reads a session folder

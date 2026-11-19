@@ -1,6 +1,6 @@
 # EEG Scroller To-do
 
-Goal: skip vs. watch on Instagram Reels from the first 3 s of Muse 2 EEG.
+Goal: skip vs. watch on Instagram Reels from the first 1 s of Muse 2 EEG.
 
 ## Understanding
 
@@ -46,12 +46,13 @@ Goal: skip vs. watch on Instagram Reels from the first 3 s of Muse 2 EEG.
 
 ## Processing
 
-- [x] Turn reel starts and lengths into skip/watch labels (cutoff 0.9; tune on real data).
-- [x] Cut a 3 s window from the start of each reel (tune the length on real data).
+- [x] Turn reel starts and lengths into skip/watch labels (watch = stayed 5 s; was 90% of the reel).
+- [x] Cut a 1 s window from the start of each reel (was 3 s; 41% of real reels were left sooner).
 - [x] Compute EEG features: band power per channel and the engagement index.
 - [x] Compute webcam features: blink rate and head movement.
 - [ ] Add a high-pass filter and drop windows with blink/motion artifacts.
-- [ ] Add a margin so the window ends well before the key press (motor planning leak).
+- [x] Add a margin so the window ends well before the key press (motor planning leak): 0.5 s.
+- [ ] Sliding-window labels: "will scroll in the next 2 s?" through the whole reel, for the auto-scroller.
 
 ## Modeling
 
@@ -63,7 +64,7 @@ Goal: skip vs. watch on Instagram Reels from the first 3 s of Muse 2 EEG.
 ## Demo
 
 - [ ] Write a replay script: load a saved session + `models/latest.joblib`, predict per reel, print predicted vs. real scroll.
-- [ ] Plug the model into `decide()` so the EEG window at 3 s decides the scroll (replaces the timer).
+- [ ] Plug the model into `decide()` so the EEG window at 1 s decides the scroll (replaces the timer).
 - [ ] **12/8:** Run the best model over a recorded session and show its scrolls next to the real ones.
 
 ## Final deliverables

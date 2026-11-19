@@ -4,6 +4,8 @@ import numpy as np
 import pandas as pd
 from scipy.signal import welch
 
+from eegscroll.labels import WINDOW_S
+
 # Frequency bands in Hz: (low, high)
 BANDS: dict[str, tuple[float, float]] = {
     "theta": (4.0, 8.0),
@@ -56,7 +58,7 @@ def zscore_within_session(features: pd.DataFrame, session_ids: pd.Series) -> pd.
     return (features - mean) / std
 
 
-def webcam_features(frames: pd.DataFrame, videos: pd.DataFrame, window_s: float = 3.0) -> pd.DataFrame:
+def webcam_features(frames: pd.DataFrame, videos: pd.DataFrame, window_s: float = WINDOW_S) -> pd.DataFrame:
     """Per-video face features from the per-frame webcam table.
 
     Uses the same [start, start + window_s) window as the EEG.

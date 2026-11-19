@@ -1,7 +1,11 @@
 """Record one session: browser, EEG and webcam together."""
 
+import re
 from datetime import datetime
 from pathlib import Path
+
+import numpy as np
+import pandas as pd
 
 from eegscroll.browser import REELS_URL, ReelWatcher
 from eegscroll.clock import now
@@ -24,7 +28,7 @@ def record_session(
     scroll_after: seconds before the program scrolls on by itself
     (timer stand-in for the EEG model). None = the viewer scrolls.
     """
-    session_id = datetime.now().strftime("%Y%m%d-%H%M%S")
+    session_id = new_session_id()
 
     # Timer policy now; the EEG model replaces this later
     decide = (lambda reel, watched: watched >= scroll_after) if scroll_after else None
@@ -51,13 +55,41 @@ def record_session(
         if cam:
             cam.stop()
 
-    # Gather everything into one Session
+    # Gather everything into one Session and save it
     eeg_data, eeg_times = eeg.to_arrays()
-    keys = watcher.keys_frame()
     frames = cam.to_frame() if cam and not cam.error else None
+    return save_recorded(
+        session_id, eeg.name, eeg_data, eeg_times, watcher, frames, t_start, t_end,
+        url=url, notes=notes, scroll_after=scroll_after, root=root,
+    )
+
+
+def new_session_id(name: str = "") -> str:
+    """Date-time id, plus a short name if given: 20261119-131505_david-desk."""
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    slug = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")[:40]
+    return f"{stamp}_{slug}" if slug else stamp
+
+
+def save_recorded(
+    session_id: str,
+    eeg_source: str,
+    eeg_data: np.ndarray,
+    eeg_times: np.ndarray,
+    watcher: ReelWatcher,
+    frames: pd.DataFrame | None,
+    t_start: float,
+    t_end: float,
+    url: str = REELS_URL,
+    notes: str = "",
+    scroll_after: float | None = None,
+    root: Path = SESSIONS_DIR,
+) -> Path:
+    """Save one recorded session to root/<id>/ and print a summary."""
+    keys = watcher.keys_frame()
     meta = {
         "session_id": session_id,
-        "eeg_source": eeg.name,
+        "eeg_source": eeg_source,
         "sfreq": SFREQ,
         "channels": CHANNELS,
         "url": url,

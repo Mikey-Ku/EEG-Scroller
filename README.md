@@ -1,6 +1,6 @@
 # EEG-Scroller
 **Goal:** predict whether you will *skip* or *keep watching* an Instagram Reel from the
-**first 3 seconds of EEG** after it starts, recorded with a Muse 2 headband.
+**first second of EEG** after it starts, recorded with a Muse 2 headband.
 
 The pipeline records EEG, reel timing and key presses while you scroll Reels normally,
 labels each reel skip/watch from how long you stayed, cuts the EEG window at reel start,
@@ -27,6 +27,24 @@ python scripts/check_pipeline.py   # Chrome opens a fake Reels page, records ~1 
 python scripts/run_synthetic.py    # fake sessions with a known alpha effect; models should score well above 0.5
 ```
 `check_pipeline.py` should end with `12 usable reels, 6 skips` and a saved model.
+
+## The app (easiest way to record, macOS)
+```bash
+python scripts/app.py          # real Muse
+python scripts/app.py --sim    # simulated EEG, to try it without the headset
+```
+One window holds everything; leave it open across sessions:
+- **Headset:** starts `muselsl stream --lsltime` itself (or reuses a stream already running).
+  A light per sensor shows signal size: green under 50 uV, yellow under 100, red above, plus a hint
+  when there's 60 Hz hum or poor contact.
+- **Live EEG:** the last 5 s of each channel, filtered 1-40 Hz.
+- **Webcam:** preview, face found, live blink score; warns if the camera stops.
+- **Session:** name + notes, Start/Stop (or `q` in Reels). Saved as `data/sessions/<date-time>_<name>/`.
+  After Stop it shows a quality report and asks: **Keep and retrain**, **Keep**, or **Delete**.
+- **Reels:** embedded on the right using Safari's engine (log in once; it's remembered).
+  Click the reels before scrolling with the arrow keys.
+
+Check any saved session from the terminal: `python -m eegscroll.quality [session folder]` (default: newest).
 
 ## Record a real session
 ```bash
@@ -98,9 +116,12 @@ All `t` values use the same LSL clock, so streams line up.
 ### Labeling rules
 - A reel ends when the next reel appears (URL changes). The last reel of a session is dropped (it wasn't scrolled away).
 - Reels whose video never played (ads, photos, stalls) are dropped, but they still end the reel before them.
-- Skip if watch time < 0.9 × reel length (`--skip-fraction`).
-- Reels shorter than the window, or left before the window ends, are dropped:
-  their window would contain the next reel.
+- Each reel's EEG window is its **first 1 s** (`WINDOW_S` in `labels.py`, `--window`).
+- **Watch** if you stayed at least **5 s** (`STAY_S`, `--stay`); **skip** if you left sooner.
+  A reel shorter than that counts as watched if you finished 90% of it.
+- Reels left within window + **0.5 s** (`GAP_S`, `--gap`), i.e. under 1.5 s, are dropped: the half second
+  before a key press contains planning the press, which would leak the answer.
+- Reels shorter than the window are dropped.
 
 The windows → band power → classifier structure follows MNE's
 [sleep staging tutorial](https://mne.tools/stable/auto_tutorials/clinical/60_sleep.html), using `scipy.signal.welch` instead of MNE.

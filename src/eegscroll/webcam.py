@@ -36,13 +36,47 @@ def frame_row(t: float, result) -> dict:
     return {"t": t, "face": 1, "blink": blink, "yaw": yaw, "pitch": pitch}
 
 
+def list_cameras() -> list[dict]:
+    """Cameras in OpenCV's numbering: [{index, name, id, builtin}].
+
+    On macOS, OpenCV sorts cameras by their unique id, so an iPhone
+    (Continuity Camera) can come before the built-in webcam.
+    """
+    try:
+        from AVFoundation import AVCaptureDevice, AVMediaTypeMuxed, AVMediaTypeVideo
+    except ImportError:  # not macOS: just offer the first camera
+        return [{"index": 0, "name": "Camera 0", "id": "0", "builtin": True}]
+    devices = list(AVCaptureDevice.devicesWithMediaType_(AVMediaTypeVideo)) + list(
+        AVCaptureDevice.devicesWithMediaType_(AVMediaTypeMuxed)
+    )
+    devices.sort(key=lambda d: str(d.uniqueID()))
+    return [
+        {
+            "index": i,
+            "name": str(d.localizedName()),
+            "id": str(d.uniqueID()),
+            "builtin": "BuiltIn" in str(d.deviceType()),
+        }
+        for i, d in enumerate(devices)
+    ]
+
+
+def default_camera() -> int:
+    """The built-in webcam if there is one, else camera 0."""
+    builtin = [c["index"] for c in list_cameras() if c["builtin"]]
+    return builtin[0] if builtin else 0
+
+
 class WebcamRecorder:
     """Background thread: camera frames -> face rows."""
 
-    def __init__(self, camera_index: int = 0) -> None:
-        self.camera_index = camera_index
+    def __init__(self, camera_index: int | None = None) -> None:
+        # Default: the laptop's own camera, not a nearby iPhone
+        self.camera_index = default_camera() if camera_index is None else camera_index
         self.rows: list[dict] = []
         self.error: str | None = None
+        self.latest_frame: np.ndarray | None = None  # last BGR frame, for previews
+        self.latest_row: dict | None = None
         self._stop = threading.Event()
         self._thread = threading.Thread(target=self._run, daemon=True)
 
@@ -82,11 +116,15 @@ class WebcamRecorder:
                 ok, frame = cap.read()
                 t = now()
                 if not ok:
+                    self._stop.wait(0.05)  # camera busy or gone; don't spin
                     continue
+                self.latest_frame = frame
 
                 # MediaPipe wants RGB and a millisecond timestamp
                 image = mp.Image(image_format=mp.ImageFormat.SRGB, data=cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-                self.rows.append(frame_row(t, landmarker.detect_for_video(image, int(t * 1000))))
+                row = frame_row(t, landmarker.detect_for_video(image, int(t * 1000)))
+                self.rows.append(row)
+                self.latest_row = row
         cap.release()
 
     def to_frame(self) -> pd.DataFrame:

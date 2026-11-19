@@ -3,11 +3,15 @@
 import numpy as np
 import pandas as pd
 
+from eegscroll.labels import WINDOW_S
+
 
 def covered_mask(eeg_times: np.ndarray, videos: pd.DataFrame, window_s: float, sfreq: float) -> np.ndarray:
     """True where EEG fully covers the video's window."""
     # Allow a few missing samples, not more
     starts = videos["start_time"].to_numpy()
+    if len(eeg_times) == 0:  # session with no EEG at all
+        return np.zeros(len(starts), dtype=bool)
     idx = np.searchsorted(eeg_times, starts)
     n = int(window_s * sfreq)
     ok = idx + n <= len(eeg_times)
@@ -20,7 +24,7 @@ def cut_windows(
     eeg: np.ndarray,
     eeg_times: np.ndarray,
     videos: pd.DataFrame,
-    window_s: float = 3.0,
+    window_s: float = WINDOW_S,
     sfreq: float = 256.0,
 ) -> np.ndarray:
     """Return array of shape (n_videos, n_channels, n_samples).

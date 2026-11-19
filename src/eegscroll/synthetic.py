@@ -4,13 +4,14 @@ import numpy as np
 import pandas as pd
 
 from eegscroll.data import CHANNELS, SFREQ, Recording, Session
+from eegscroll.labels import STAY_S, WINDOW_S
 
 
 def make_synthetic_session(
     session_id: str,
     n_videos: int = 60,
     alpha_effect: float = 0.5,
-    window_s: float = 3.0,
+    window_s: float = WINDOW_S,
     seed: int = 0,
 ) -> Session:
     """A Session like record.py saves, minus webcam.
@@ -21,13 +22,13 @@ def make_synthetic_session(
     # Reproducible randomness
     rng = np.random.default_rng(seed)
 
-    # Random reel lengths, about half watched
-    durations = rng.uniform(5, 60, n_videos)
+    # Random reel lengths, about half watched (stayed past STAY_S)
+    durations = rng.uniform(8, 60, n_videos)
     watched = rng.random(n_videos) < 0.5
     watch_times = np.where(
         watched,
-        durations * rng.uniform(0.95, 1.5, n_videos),  # finished, maybe looped
-        durations * rng.uniform(0.05, 0.85, n_videos),  # left early
+        rng.uniform(STAY_S + 0.5, 30, n_videos),  # stayed
+        rng.uniform(1.6, STAY_S - 0.5, n_videos),  # left early
     )
 
     # Reel start times; one extra final reel
